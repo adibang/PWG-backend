@@ -2,8 +2,8 @@ import sqlite3
 import os
 import sys
 
-# Gunakan environment variable DATABASE_PATH jika ada, jika tidak gunakan folder /tmp agar writable di container
-DB_PATH = os.environ.get('DATABASE_PATH', os.path.join('/tmp', 'pos.db'))
+# Gunakan environment variable DATABASE_PATH jika ada, default ke /tmp/pos.db
+DB_PATH = os.environ.get('DATABASE_PATH', '/tmp/pos.db')
 
 def get_db():
     """Mendapatkan koneksi database dengan row_factory"""
@@ -21,7 +21,6 @@ def init_db():
         conn = get_db()
         cursor = conn.cursor()
         
-        # Tabel products
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS products (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,7 +35,6 @@ def init_db():
             )
         ''')
         
-        # Tabel categories
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS categories (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,7 +45,6 @@ def init_db():
             )
         ''')
         
-        # Tabel settings
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
@@ -56,7 +53,6 @@ def init_db():
             )
         ''')
         
-        # Tabel print_history
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS print_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,11 +65,10 @@ def init_db():
         
         conn.commit()
         conn.close()
-        print(f"[INFO] Database initialized successfully at {DB_PATH}", file=sys.stderr)
+        print(f"[INFO] Database initialized at {DB_PATH}", file=sys.stderr)
     except Exception as e:
-        print(f"[FATAL] Database initialization error: {e}", file=sys.stderr)
-        raise  # Penting: biarkan error naik agar aplikasi gagal start
+        print(f"[FATAL] Database init error: {e}", file=sys.stderr)
+        raise
 
 def row_to_dict(row):
-    """Konversi sqlite3.Row ke dictionary"""
     return {key: row[key] for key in row.keys()}
