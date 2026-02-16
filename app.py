@@ -1,5 +1,6 @@
 import os
 import sys
+import logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json
@@ -7,16 +8,39 @@ import sqlite3
 from datetime import datetime
 from database import get_db, init_db, row_to_dict
 
+# Setup logging ke stderr
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s %(levelname)s: %(message)s',
+    stream=sys.stderr
+)
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
 CORS(app)
 
-# Inisialisasi database dengan penanganan error
+# Log setiap request yang masuk
+@app.before_request
+def log_request_info():
+    logger.debug(f"Request: {request.method} {request.path}")
+
+# Inisialisasi database
 try:
     init_db()
-    print("[INFO] Database initialized successfully", file=sys.stderr)
+    logger.info("Database initialized successfully")
 except Exception as e:
-    print(f"[FATAL] Database initialization failed: {e}", file=sys.stderr)
-    sys.exit(1)  # Keluar dengan kode error agar Railway mencatat kegagalan
+    logger.critical(f"Database initialization failed: {e}")
+    sys.exit(1)
+
+# Route sederhana untuk testing
+@app.route('/')
+def index():
+    logger.debug("Root endpoint accessed")
+    return jsonify({'message': 'POS Barcode API is running'})
+
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok', 'time': datetime.now().isoformat()})
 
 # ==================== Helper Functions ====================
 def execute_query(query, args=(), one=False):
@@ -42,11 +66,6 @@ def execute_update_delete(query, args=()):
     affected = cur.rowcount
     conn.close()
     return affected
-
-# ==================== Health Check (untuk Railway) ====================
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({'status': 'ok', 'time': datetime.now().isoformat()})
 
 # ==================== Products ====================
 @app.route('/api/products', methods=['GET'])
@@ -144,14 +163,11 @@ def update_category(id):
 
 @app.route('/api/categories/<int:id>', methods=['DELETE'])
 def delete_category(id):
-    # Ambil nama kategori sebelum dihapus untuk update produk
     cat = execute_query('SELECT name FROM categories WHERE id = ?', (id,), one=True)
     if not cat:
         return jsonify({'error': 'Kategori tidak ditemukan'}), 404
     
-    # Update produk dengan kategori ini menjadi 'Lainnya'
     execute_update_delete('UPDATE products SET category = ? WHERE category = ?', ('Lainnya', cat['name']))
-    
     affected = execute_update_delete('DELETE FROM categories WHERE id = ?', (id,))
     return jsonify({'success': True})
 
@@ -196,13 +212,10 @@ def import_data():
     
     conn = get_db()
     cursor = conn.cursor()
-    
-    # Hapus semua data lama
     cursor.execute('DELETE FROM products')
     cursor.execute('DELETE FROM categories')
     cursor.execute('DELETE FROM settings')
     
-    # Import products
     for product in data['products']:
         cursor.execute('''
             INSERT INTO products (id, name, code, category, flex, catcode, image, created_at, updated_at)
@@ -211,7 +224,6 @@ def import_data():
               product['flex'], product['catcode'], product.get('image', ''),
               product.get('created_at'), product.get('updated_at')))
     
-    # Import categories
     for cat in data.get('categories', []):
         cursor.execute('''
             INSERT INTO categories (id, name, image, created_at, updated_at)
@@ -219,7 +231,6 @@ def import_data():
         ''', (cat.get('id'), cat['name'], cat.get('image', ''),
               cat.get('created_at'), cat.get('updated_at')))
     
-    # Import settings
     for setting in data.get('settings', []):
         cursor.execute('''
             INSERT INTO settings (key, value, updated_at)
@@ -232,5 +243,5 @@ def import_data():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    # Di production sebaiknya debug=False
+    logger.info(f"Starting Flask development server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
