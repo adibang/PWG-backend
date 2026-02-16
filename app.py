@@ -1,4 +1,5 @@
 import os
+import sys
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json
@@ -7,9 +8,15 @@ from datetime import datetime
 from database import get_db, init_db, row_to_dict
 
 app = Flask(__name__)
-CORS(app)  # Izinkan akses dari frontend
+CORS(app)
 
-init_db()
+# Inisialisasi database dengan penanganan error
+try:
+    init_db()
+    print("[INFO] Database initialized successfully", file=sys.stderr)
+except Exception as e:
+    print(f"[FATAL] Database initialization failed: {e}", file=sys.stderr)
+    sys.exit(1)  # Keluar dengan kode error agar Railway mencatat kegagalan
 
 # ==================== Helper Functions ====================
 def execute_query(query, args=(), one=False):
@@ -35,6 +42,11 @@ def execute_update_delete(query, args=()):
     affected = cur.rowcount
     conn.close()
     return affected
+
+# ==================== Health Check (untuk Railway) ====================
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'ok', 'time': datetime.now().isoformat()})
 
 # ==================== Products ====================
 @app.route('/api/products', methods=['GET'])
@@ -155,7 +167,6 @@ def save_settings():
     data = request.json
     now = datetime.now().isoformat()
     for key, value in data.items():
-        # Simpan sebagai JSON string
         json_value = json.dumps(value)
         execute_update_delete('''
             INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
@@ -220,7 +231,6 @@ def import_data():
     return jsonify({'success': True})
 
 if __name__ == '__main__':
-    # Untuk menjalankan langsung (development)
     port = int(os.environ.get('PORT', 5000))
-    # Gunakan host='0.0.0.0' agar bisa diakses dari luar container
-    app.run(host='0.0.0.0', port=port, debug=True)
+    # Di production sebaiknya debug=False
+    app.run(host='0.0.0.0', port=port, debug=False)
