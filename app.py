@@ -1,3 +1,4 @@
+import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json
@@ -219,4 +220,7 @@ def import_data():
     return jsonify({'success': True})
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Untuk menjalankan langsung (development)
+    port = int(os.environ.get('PORT', 5000))
+    # Gunakan host='0.0.0.0' agar bisa diakses dari luar container
+    app.run(host='0.0.0.0', port=port, debug=True)
